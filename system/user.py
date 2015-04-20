@@ -66,6 +66,14 @@ options:
         description:
             - If C(yes), will only add groups, not set them to just the list
               in I(groups).
+    skip_missing_groups:
+        required: false
+        default: "no"
+        choices: [ "yes", "no" ]
+        description:
+            - If C(yes), gracefully skip over any additional I(groups) specified
+              that do not exist. (Default is for the task to fail if a group is
+              missing.) This does not affect behavior for the primary group.
     shell:
         required: false
         description:
@@ -267,6 +275,7 @@ class User(object):
         self.system     = module.params['system']
         self.login_class = module.params['login_class']
         self.append     = module.params['append']
+        self.skip_missing_groups = module.params['skip_missing_groups']
         self.sshkeygen  = module.params['generate_ssh_key']
         self.ssh_bits   = module.params['ssh_key_bits']
         self.ssh_type   = module.params['ssh_key_type']
@@ -517,7 +526,10 @@ class User(object):
         groups = set(filter(None, self.groups.split(',')))
         for g in set(groups):
             if not self.group_exists(g):
-                self.module.fail_json(msg="Group %s does not exist" % (g))
+                if self.skip_missing_groups:
+                    groups.remove(g)
+                else:
+                    self.module.fail_json(msg="Group %s does not exist" % (g))
             if info and remove_existing and self.group_info(g)[2] == info[3]:
                 groups.remove(g)
         return groups
@@ -2064,6 +2076,7 @@ def main():
             # following options are specific to usermod
             move_home=dict(default='no', type='bool'),
             append=dict(default='no', type='bool'),
+            skip_missing_groups=dict(default='no', type='bool'),
             # following are specific to ssh key generation
             generate_ssh_key=dict(type='bool'),
             ssh_key_bits=dict(default=ssh_defaults['bits'], type='str'),
